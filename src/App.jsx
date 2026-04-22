@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo, useCallback } from "react";
 import * as XLSX from "xlsx";
 import {
@@ -5,7 +6,7 @@ import {
   gid, today, fh, fc, fdate, fdow,
 } from "./engine.js";
 import { loadData, saveData, clearData, runtime } from "./storage.js";
-import { makeDefaults } from "./defaults.js";
+import { makeDefaults, APP_VERSION, GITHUB_REPO } from "./defaults.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UI PRIMITIVES
@@ -698,6 +699,151 @@ function Expenses({ data, setData, toast }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ABOUT / UPDATE CHECK
+// ═══════════════════════════════════════════════════════════════════════════
+function AboutTab({ toast }) {
+  const [state, setState] = useState("idle"); // idle | checking | latest | outdated | error
+  const [latest, setLatest] = useState(null);
+  const [releaseUrl, setReleaseUrl] = useState(null);
+  const [releaseNotes, setReleaseNotes] = useState("");
+
+  // Compare semantic versions. Returns 1 if a > b, -1 if a < b, 0 if equal.
+  const compareVersions = (a, b) => {
+    const pa = a.split(".").map(Number);
+    const pb = b.split(".").map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const na = pa[i] || 0, nb = pb[i] || 0;
+      if (na > nb) return 1;
+      if (na < nb) return -1;
+    }
+    return 0;
+  };
+
+  const checkUpdate = async () => {
+    setState("checking");
+    try {
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+        headers: { "Accept": "application/vnd.github+json" },
+      });
+      if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
+      const data = await res.json();
+      const tag = (data.tag_name || "").replace(/^v/, "");
+      if (!tag) throw new Error("No version tag found");
+      setLatest(tag);
+      setReleaseUrl(data.html_url);
+      setReleaseNotes(data.body || "");
+      const cmp = compareVersions(tag, APP_VERSION);
+      if (cmp > 0) setState("outdated");
+      else setState("latest");
+    } catch (err) {
+      console.error("Update check failed:", err);
+      setState("error");
+      toast("Could not check for updates", "err");
+    }
+  };
+
+  const openRelease = () => {
+    if (releaseUrl) window.open(releaseUrl, "_blank");
+  };
+
+  return (
+    <div className="card" style={{ maxWidth: 620 }}>
+      <div className="ct">About TimePay</div>
+
+      <div style={{ marginBottom: 18 }}>
+        <div className="fl fg16" style={{ marginBottom: 10 }}>
+          <div>
+            <div className="tmut" style={{ fontSize: 10.5, letterSpacing: 0.8, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>Installed Version</div>
+            <div className="mono" style={{ fontSize: 20, fontWeight: 700 }}>v{APP_VERSION}</div>
+          </div>
+          {state === "latest" && (
+            <div>
+              <div className="tmut" style={{ fontSize: 10.5, letterSpacing: 0.8, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>Latest</div>
+              <div className="mono tgr" style={{ fontSize: 20, fontWeight: 700 }}>v{latest} ✓</div>
+            </div>
+          )}
+          {state === "outdated" && (
+            <div>
+              <div className="tmut" style={{ fontSize: 10.5, letterSpacing: 0.8, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>Available</div>
+              <div className="mono tacc" style={{ fontSize: 20, fontWeight: 700 }}>v{latest}</div>
+            </div>
+          )}
+        </div>
+
+        {state === "idle" && (
+          <button className="btn bp" onClick={checkUpdate}>Check for updates</button>
+        )}
+
+        {state === "checking" && (
+          <div className="tsec" style={{ fontSize: 13 }}>Checking GitHub for latest release…</div>
+        )}
+
+        {state === "latest" && (
+          <>
+            <div className="alw" style={{ background: "var(--grnbg)", border: "1px solid rgba(78,203,166,0.3)", color: "var(--grn)" }}>
+              You are running the latest version.
+            </div>
+            <button className="btn bs bsm" onClick={checkUpdate}>Check again</button>
+          </>
+        )}
+
+        {state === "outdated" && (
+          <>
+            <div className="alw alwarn">
+              A new version is available. Download and install to get the latest features and fixes.
+            </div>
+            {releaseNotes && (
+              <div style={{ background: "var(--bg3)", border: "1px solid var(--br)", borderRadius: "var(--r)", padding: 12, marginBottom: 12 }}>
+                <div className="tmut" style={{ fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Release Notes</div>
+                <pre style={{ fontFamily: "var(--fn)", fontSize: 12.5, color: "var(--t2)", whiteSpace: "pre-wrap", margin: 0 }}>{releaseNotes}</pre>
+              </div>
+            )}
+            <div className="fl fg8">
+              <button className="btn bp" onClick={openRelease}>Download v{latest} →</button>
+              <button className="btn bs bsm" onClick={checkUpdate}>Re-check</button>
+            </div>
+            <div className="tmut" style={{ fontSize: 11, marginTop: 10 }}>
+              Export your data first (Exports page) before installing updates, as a safety measure.
+            </div>
+          </>
+        )}
+
+        {state === "error" && (
+          <>
+            <div className="alw alerr">
+              Could not reach GitHub. Check your internet connection and try again.
+            </div>
+            <button className="btn bs bsm" onClick={checkUpdate}>Try again</button>
+          </>
+        )}
+      </div>
+
+      <div className="divd" />
+
+      <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.7 }}>
+        <div style={{ marginBottom: 6 }}>
+          <strong className="tsec">Source code:</strong>{" "}
+          <a href={`https://github.com/${GITHUB_REPO}`} onClick={(e) => { e.preventDefault(); window.open(`https://github.com/${GITHUB_REPO}`, "_blank"); }}
+             style={{ color: "var(--acc)", textDecoration: "none" }}>
+            github.com/{GITHUB_REPO}
+          </a>
+        </div>
+        <div style={{ marginBottom: 6 }}>
+          <strong className="tsec">All releases:</strong>{" "}
+          <a href={`https://github.com/${GITHUB_REPO}/releases`} onClick={(e) => { e.preventDefault(); window.open(`https://github.com/${GITHUB_REPO}/releases`, "_blank"); }}
+             style={{ color: "var(--acc)", textDecoration: "none" }}>
+            View changelog
+          </a>
+        </div>
+        <div className="tmut" style={{ fontSize: 11, marginTop: 10 }}>
+          All data is stored locally on your computer. Nothing is sent to any server except this update check.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // PAGE: SETTINGS (tabs: Profile / Activities / Projects / Rules)
 // ═══════════════════════════════════════════════════════════════════════════
 function Settings({ data, setData, toast }) {
@@ -710,7 +856,7 @@ function Settings({ data, setData, toast }) {
       </div>
       <div className="pc">
         <div className="tabs">
-          {["profile", "activities", "projects", "rules"].map(t => (
+          {["profile", "activities", "projects", "rules", "about"].map(t => (
             <button key={t} className={`tab ${tab === t ? "act" : ""}`} onClick={() => setTab(t)}>
               {t[0].toUpperCase() + t.slice(1)}
             </button>
@@ -720,6 +866,7 @@ function Settings({ data, setData, toast }) {
         {tab === "activities" && <ActsTab     data={data} setData={setData} toast={toast} />}
         {tab === "projects"   && <ProjTab     data={data} setData={setData} toast={toast} />}
         {tab === "rules"      && <RulesTab    data={data} setData={setData} toast={toast} />}
+        {tab === "about"      && <AboutTab    toast={toast} />}
       </div>
     </>
   );
@@ -1274,7 +1421,7 @@ export default function App() {
         <aside className="sb">
           <div className="sbl">
             <div className="logo">Time<span>Pay</span></div>
-            <div className="logosub">v1.0 · {runtime.toUpperCase()}</div>
+            <div className="logosub">v{APP_VERSION}</div>
           </div>
           <nav className="sbn">
             {sections.map(s => (
@@ -1290,7 +1437,8 @@ export default function App() {
           </nav>
           <div className="sbfoot">
             {data.profile.name}<br />
-            {data.profile.isRotation ? "Rotation" : "Non-Rotation"} · {fc(data.profile.annualSalary / 1950)}/h
+            {data.profile.isRotation ? "Rotation" : "Non-Rotation"} · {fc(data.profile.annualSalary / 1950)}/h<br />
+            <span className="tmut">v{APP_VERSION}</span>
           </div>
         </aside>
 
