@@ -4,6 +4,12 @@ A local time-tracking and payroll app for rotation / non-rotation workers with r
 
 ---
 
+## Installation (Windows)
+
+Download the latest installer from the [Releases page] (https://github.com/oskarrakvaag/timepay/releases/tag/TimePay).
+
+Double-click the `.msi` file. Windows may show a "Unknown publisher" warning — click **More info** → **Run anyway**.
+
 ## Prerequisites (one-time setup)
 
 You need two things installed globally on your computer:
