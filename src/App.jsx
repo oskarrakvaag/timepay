@@ -1,4 +1,4 @@
-
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import * as XLSX from "xlsx";
 import {
@@ -702,10 +702,19 @@ function Expenses({ data, setData, toast }) {
 // ABOUT / UPDATE CHECK
 // ═══════════════════════════════════════════════════════════════════════════
 function AboutTab({ toast }) {
-  const [state, setState] = useState("idle"); // idle | checking | latest | outdated | error
+  const [state, setState] = useState("idle");
   const [latest, setLatest] = useState(null);
   const [releaseUrl, setReleaseUrl] = useState(null);
   const [releaseNotes, setReleaseNotes] = useState("");
+
+  // Safe URL opener — works in Tauri and falls back to window.open in browser
+  const openExternal = (url) => {
+    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+      openUrl(url).catch(err => console.error("Open URL failed:", err));
+    } else {
+      openExternal(url, "_blank");
+    }
+  };
 
   // Compare semantic versions. Returns 1 if a > b, -1 if a < b, 0 if equal.
   const compareVersions = (a, b) => {
@@ -743,7 +752,7 @@ function AboutTab({ toast }) {
   };
 
   const openRelease = () => {
-    if (releaseUrl) window.open(releaseUrl, "_blank");
+    if (releaseUrl) openExternal(releaseUrl);
   };
 
   return (
@@ -823,15 +832,17 @@ function AboutTab({ toast }) {
       <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.7 }}>
         <div style={{ marginBottom: 6 }}>
           <strong className="tsec">Source code:</strong>{" "}
-          <a href={`https://github.com/${GITHUB_REPO}`} onClick={(e) => { e.preventDefault(); window.open(`https://github.com/${GITHUB_REPO}`, "_blank"); }}
-             style={{ color: "var(--acc)", textDecoration: "none" }}>
+          <a href={`https://github.com/${GITHUB_REPO}`} 
+            onClick={(e) => { e.preventDefault(); openExternal(`https://github.com/${GITHUB_REPO}`); }}
+            style={{ color: "var(--acc)", textDecoration: "none" }}>
             github.com/{GITHUB_REPO}
           </a>
         </div>
         <div style={{ marginBottom: 6 }}>
           <strong className="tsec">All releases:</strong>{" "}
-          <a href={`https://github.com/${GITHUB_REPO}/releases`} onClick={(e) => { e.preventDefault(); window.open(`https://github.com/${GITHUB_REPO}/releases`, "_blank"); }}
-             style={{ color: "var(--acc)", textDecoration: "none" }}>
+          <a href={`https://github.com/${GITHUB_REPO}/releases`} 
+            onClick={(e) => { e.preventDefault(); openExternal(`https://github.com/${GITHUB_REPO}/releases`); }}
+            style={{ color: "var(--acc)", textDecoration: "none" }}>
             View changelog
           </a>
         </div>
@@ -1293,7 +1304,7 @@ function Exports({ data, setData, toast }) {
 
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-    const win = window.open(url, "_blank");
+    const win = openExternal(url, "_blank");
     if (!win) toast("Pop-up blocked — allow pop-ups to open PDF", "err");
     else toast("Report opened — use browser Print → Save as PDF", "ok");
     return true;
